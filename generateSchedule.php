@@ -1,26 +1,4 @@
 <?php
-		function conflictingDay($day1, $day2) {
-				$mday1= str_replace("-","",$day1);
-				$mday2 = str_replace("-","",$day2);
-				
-				if(similar_text($mday1,$mday2,$percent) > 0)
-					return 1;
-				else
-					return 0;
-		}
-		
-		function conflictingTime($schedStart, $schedEnd, $eligibalStart, $eligibalEnd) {		
-				
-				if($eligibalStart >= $schedStart && $eligibalStart >= $schedEnd)
-					return 1;
-				else if($eligibalEnd >= $schedStart && $eligibalStart >= $schedEnd)
-					return 1;
-				else
-					return 0;
-		}
-			
-	
-	
 	session_start();
 	$user = $_SESSION['id'];
 	$username =  $_SESSION['use'];	
@@ -29,9 +7,28 @@
 	$servername = "localhost";
 	$username = "root";
 	$password = "publicvoid1";
-	$dbname = "school";	
-	$eligibal = array();
+	$dbname = "school";
 	
+		function conflictingDay($day1, $day2) {
+				$mday1= str_replace("-","",$day1);
+				$mday2 = str_replace("-","",$day2);
+			
+				similar_text($mday1,$mday2,$percent);
+				if($percent == 0)
+					return 0;
+				else
+					return 1;
+		}
+		
+		function conflictingTime($schedStart, $schedEnd, $eligibalStart, $eligibalEnd) {				
+				
+				if($eligibalStart <= $schedEnd && $schedStart <= $eligibalEnd)
+					return 1;				
+				else
+					return 0;
+		}	
+				
+		
 	
 	$courseLoad = 5;
 	$counter = 0;
@@ -46,312 +43,225 @@
 	}
 	
 	$sql = "DELETE FROM schedule WHERE studentID = $user";					
-	$conn->query($sql);
-		
+	$conn->query($sql);	
+	
+	/**** ADD CONSTRAINTS TO SCHEDULE ****/
+
+	$sql = "SELECT * FROM preferences WHERE studentID = $user";					
+	$prefs = $conn->query($sql);
+	
+	if($prefs->num_rows > 0)
+		{
+			while($row = $prefs->fetch_assoc())
+			{
+				$dayTime = $row["day"];
+				$startTime = $row["start"];
+				$endTime = $row["end"];				
+				$sql = "INSERT INTO schedule (studentID, day, courseName, type, start, end) VALUES ('$user', '$dayTime', '1001', 'PREF', '$startTime', '$endTime')";
+				$conn->query($sql);
+			}
+		}
+	
 	/**********FIND COURSES ELIGIBAL TO TAKE*********/
 	$sql = "SELECT * FROM courselist";
 	$courseList = $conn->query($sql);
 
-		// output data of each row
-		while($row = $courseList->fetch_assoc()) 
+	// output data of each row
+	while($row = $courseList->fetch_assoc()) 
+	{
+		$testcourse = $row["id"];
+		
+		$sql = "SELECT * FROM courserequisites WHERE courseID = $testcourse";
+		$courseReqs = $conn->query($sql);
+		
+		if($courseReqs->num_rows > 0)
 		{
-			$testcourse = $row["id"];
-			
-			$sql = "SELECT * FROM courserequisites WHERE courseID = $testcourse";
-			$courseReqs = $conn->query($sql);
-			
-			if($courseReqs->num_rows > 0)
+			while($reqRow = $courseReqs->fetch_assoc())
 			{
-				while($reqRow = $courseReqs->fetch_assoc())
+				$isCourseCompleted = $reqRow["reqID"];					
+				
+				$sql = "SELECT * FROM completecourses WHERE studentID = $user AND courseID = $isCourseCompleted";
+				$doneCourses = $conn->query($sql);						
+				
+				if($doneCourses->num_rows > 0)
 				{
-					$isCourseCompleted = $reqRow["reqID"];					
-					
-					$sql = "SELECT * FROM completecourses WHERE studentID = $user AND courseID = $isCourseCompleted";
-					$doneCourses = $conn->query($sql);						
-					
-					if($doneCourses->num_rows > 0)
+					$eligibalCourse =$row["id"];
+					$sql = "SELECT * FROM completecourses WHERE studentID = $user AND courseID = $eligibalCourse";
+					$checkCourses = $conn->query($sql);						
+				
+					if($checkCourses->num_rows > 0)
+					{							
+					}
+					else
 					{
-						$eligibalCourse =$row["id"];
-						$sql = "SELECT * FROM completecourses WHERE studentID = $user AND courseID = $eligibalCourse";
-						$checkCourses = $conn->query($sql);						
-					
-						if($checkCourses->num_rows > 0)
-						{							
-						}
-						else
-						{
-							$eligibal[$counter] = $row["id"];
-							echo $eligibal[$counter]. "<br>";
-							$counter++;
-						}
-					}					  
-					
-				}
-			}	
+						$eligibal[$counter] = $row["id"];
+						echo $eligibal[$counter]. "<br>";
+						$counter++;
+					}
+				}					  
+				
+			}
+		}	
+		else
+		{
+			$eligibalCourse =$row["id"];				
+			$sql = "SELECT * FROM completecourses WHERE studentID = $user AND courseID = $eligibalCourse";
+			$checkCourses = $conn->query($sql);						
+		
+			if($checkCourses->num_rows > 0)
+			{							
+			}
 			else
 			{
-				$eligibalCourse =$row["id"];				
-						$sql = "SELECT * FROM completecourses WHERE studentID = $user AND courseID = $eligibalCourse";
-						$checkCourses = $conn->query($sql);						
-					
-						if($checkCourses->num_rows > 0)
-						{							
-						}
-						else
-						{
-							if($row["id"] != '100')
-							{
-								$eligibal[$counter] = $row["id"];
-								echo $eligibal[$counter]. "<br>";
-								$counter++;
-							}
-						}
+				if($row["id"] != '100' && $row["id"] != '101')
+				{
+					$eligibal[$counter] = $row["id"];
+					echo $eligibal[$counter]. "<br>";
+					$counter++;
+				}
 			}
+		}
 		
 				
 	} 		
 	
 	
 	/************FIND CONFLICTS WITH SCHEDULE AND CONSTRAINTS*********/
-		for($x = 0; $x < $counter; $x++)
-		{
-			if($numOfCourse >= $courseLoad)
-				break;
-			
-			//Lectures
-			$sql = "SELECT * FROM courseinfo WHERE course_id = $eligibal[$x] AND courseType = 'Lec'";
-			$courseInfo = $conn->query($sql);
-			
-			$addLec = null;
-			$addTut = null;
-			$addLab = null;
-			$noLec = false;
-			$noTut = false;
-			$noLab = false;
-			
-			if ($courseInfo->num_rows > 0) {	
-				while($row = $courseInfo->fetch_assoc())
-				{
-					$sql = "SELECT * FROM preferences WHERE studentID = $user";
-					$constraints = $conn->query($sql);
-					$constraintsRow = $constraints->fetch_assoc();
-					
-					$sql = "SELECT * FROM schedule WHERE studentID = $user";
-					$schedInfo = $conn->query($sql);				
-								
-					if(conflictingDay($row["day"], $constraintsRow["day"]) == 0)
-					{
-						if($schedInfo->num_rows > 0)
-						{
-							while($schedRow = $schedInfo->fetch_assoc())
-							{							
-								if(conflictingDay($row["day"], $schedRow["day"]) == 1)							
-								{									
-									if(conflictingTime($schedRow["start"], $schedRow["end"], $row["start"], $row["end"]) == 0)
-									{									
-										$addLec = $row["id"];
-										goto tutorials;
-									}
-								}
-								else
-								{								
-									$addLec = $row["id"];
-									goto tutorials;							
-								}
-							}
-						}
-						else
-						{
-							$addLec = $row["id"];
-							goto tutorials;
-						}				
-					}	
-				}
-			}
-			else
-				$noLec = TRUE;
-			
-			if($noLec == false && $addLec == null)
-				goto skip;
-			
-			//Tutorials
-			tutorials:
-			$sql = "SELECT * FROM courseinfo WHERE course_id = $eligibal[$x] AND courseType = 'Tut'";
-			$courseInfo = $conn->query($sql);
-			
-			if ($courseInfo->num_rows > 0) {
-							
-					
-				while($row = $courseInfo->fetch_assoc())
-				{
-					$sql = "SELECT * FROM preferences WHERE studentID = $user";
-					$constraints = $conn->query($sql);
-					$constraintsRow = $constraints->fetch_assoc();
-					
-					$sql = "SELECT * FROM schedule WHERE studentID = $user ";
-					$schedInfo = $conn->query($sql);	
-					
-					if(conflictingDay($row["day"], $constraintsRow["day"]) == 0)
-					{
-						if($schedInfo->num_rows > 0)
-						{
-							while($schedRow = $schedInfo->fetch_assoc())
-							{
-								if(conflictingDay($row["day"], $schedRow["day"]) == 1)
-								{							
-									if(conflictingTime($schedRow["start"], $schedRow["end"], $row["start"], $row["end"]) == 0)
-									{														
-										$addTut = $row["id"];
-										goto laboratories;
-									}
-								}
-								else
-								{
-									$addTut = $row["id"];
-									goto laboratories;							
-								}
-							}
-						}	
-						else
-						{
-							$addTut = $row["id"];
-							goto laboratories;
-						}
-					}
-				}	
-				
-			}
-			else
-				$noTut = TRUE;
-			
-			if($noTut == false && $addTut == null)
-				goto skip;
-			
-			//Laboratories
-			laboratories:
-			$sql = "SELECT * FROM courseinfo WHERE course_id = $eligibal[$x] AND courseType = 'Lab'";
-			$courseInfo = $conn->query($sql);
-			
-			if ($courseInfo->num_rows > 0) {
-						
-					
-				while($row = $courseInfo->fetch_assoc())
-				{
-					$sql = "SELECT * FROM preferences WHERE studentID = $user";
-					$constraints = $conn->query($sql);
-					$constraintsRow = $constraints->fetch_assoc();
-					
-					$sql = "SELECT * FROM schedule WHERE studentID = $user ";
-					$schedInfo = $conn->query($sql);
-					
-					if(conflictingDay($row["day"], $constraintsRow["day"]) == 0)
-					{
-						if($schedInfo->num_rows > 0)
-						{
-							while($schedRow = $schedInfo->fetch_assoc())
-							{						
-								if(conflictingDay($row["day"], $schedRow["day"]) == 1)
-								{						
-									if(conflictingTime($schedRow["start"], $schedRow["end"], $row["start"], $row["end"]) == 0)
-									{									
-										$addLab = $row["id"];
-										goto insert;
-									}
-								}
-								else
-								{	
-									
-									$addLab = $row["id"];
-									goto insert;
-								}
-							}
-						}
-						else
-						{
-							$addLab = $row["id"];	
-							goto insert;
-						}				
-					}
-				}	
-				
-			}
-			else
-				$noLab = TRUE;	
+	
+	$numOfCourse =0;
+	echo "counter ->". $counter. "<br>";
+	for($x = 0; $x <= $counter; $x++)
+	{
+		$noLec = false;
+		$noTut = false;
+		$noLab = false;
+		$addLec = false;
+		$addTut = false;		
+		
+		$sql = "SELECT * FROM courseinfo WHERE course_id= $eligibal[$x] AND courseType = 'Lec'";
+		$courseLecInfo = $conn->query($sql);
+		
+		$sql = "SELECT * FROM courseinfo WHERE course_id= $eligibal[$x] AND courseType = 'Tut'";
+		$courseTutInfo = $conn->query($sql);
+		
+		$sql = "SELECT * FROM courseinfo WHERE course_id= $eligibal[$x] AND courseType = 'Lab'";
+		$courseLabInfo = $conn->query($sql);
+		
+		//check if course has no lec
+		if($courseLecInfo->num_rows == 0)
+			$noLec = true;
+		
+		//check if course has no tut
+		if($courseTutInfo->num_rows == 0)
+			$noTut = true;
+		
+		//check if course has no lab
+		if($courseLabInfo->num_rows == 0)
+			$noLab = true;
+		
+		//LECTURES		
+		while($noLec == false && $courseLecInfoRow = $courseLecInfo->fetch_assoc())
+		{	
+			$conflict = false;
+			$dayString = str_replace("-","",$courseLecInfoRow["day"]);				
+			for($z = 0; $z < strlen($dayString); $z++)
+			{
+				$startTime = $courseLecInfoRow["start"];
+				$endTime = $courseLecInfoRow["end"];
+				$day = $dayString[$z];
+				$sql = "SELECT * FROM schedule WHERE day = '$day' AND 
+						((CAST(start as time) <= '$startTime' AND CAST(end as time) > '$startTime') or 
+						(CAST(start as time) < '$endTime' AND CAST(end as time) >= '$endTime'))";
+				$schedule = $conn->query($sql);	
 
-			if($noLab == false && $addLab == null)
-				goto skip;
-			
-			insert:
-			//Add lectures 
-			if($addLec != null && $noLec == false)
-			{
-				$numOfCourse++;
-				
-				$sql = "SELECT * FROM courseinfo WHERE id= $addLec";
-				$courseInfo = $conn->query($sql);									
-				
-				$row = $courseInfo->fetch_assoc();					
-				
-				$day = $row["day"];
-				$id = $row["course_id"];
-				$type = $row["courseType"];
-				$start = $row["start"];
-				$end = $row["end"];				
-				
-				$sql = "INSERT INTO schedule (studentID, day, courseName, type, start, end)
-						VALUES ('$user', '$day', '$id', '$type', '$start', '$end')";
-				
-				$conn->query($sql);
+				if($schedule->num_rows > 0)
+				{
+					$conflict = true;
+					break;
+				}				
 			}
-			
-			//Add tutorials
-			if($addTut != null && $noTut == false)
+			if($conflict == false)
 			{
-				$sql = "SELECT * FROM courseinfo WHERE id= $addTut";
-				$courseInfo = $conn->query($sql);								
-				
-				$row = $courseInfo->fetch_assoc();					
-				
-				$day = $row["day"];
-				$id = $row["course_id"];
-				$type = $row["courseType"];
-				$start = $row["start"];
-				$end = $row["end"];	
-				
-				$sql = "INSERT INTO schedule (studentID, day, courseName, type, start, end)
-						VALUES ('$user', '$day', '$id', '$type', '$start', '$end')";
-				
-				$conn->query($sql);
+				$addLec = true;
+				break;
 			}
-			
-			//Add laboratories
-			if($addLab != null && $noLab == false)
-			{
-					$sql = "SELECT * FROM courseinfo WHERE id= $addLab";
-					$courseInfo = $conn->query($sql);								
-					
-					$row = $courseInfo->fetch_assoc();					
-					
-					$day = $row["day"];
-					$id = $row["course_id"];
-					$type = $row["courseType"];
-					$start = $row["start"];
-					$end = $row["end"];	
-					
-					$sql = "INSERT INTO schedule (studentID, day, courseName, type, start, end)
-							VALUES ('$user', '$day', '$id', '$type', '$start', '$end')";
-					
-					$conn->query($sql);	
-				
-			}
-				
-				
-		skip:			
-			
-						
 		}
 		
-		header('Location: /cronograma/home.php');
+		if($addLec == true)
+		{
+			//Seperate course day, into single days for easy schedule reading
+			$dayString = str_replace("-","",$courseLecInfoRow["day"]);				
+			for($y = 0; $y < strlen($dayString); $y++)
+			{
+				$dayChar = $dayString[$y];
+				$courseID = $courseLecInfoRow["id"];
+				$startTime = $courseLecInfoRow["start"];
+				$endTime = $courseLecInfoRow["end"];
+				$type = $courseLecInfoRow["courseType"];
+				$sql = "INSERT INTO schedule (studentID, day, courseName, type, start, end) VALUES ('$user', '$dayChar', '$courseID', '$type', '$startTime', '$endTime')";
+				$conn->query($sql);				
+			}
+			$numOfCourse++;
+			echo " added <br>";
+		}
+		else if($noLec == false)
+		{
+				goto skip;
+		}
+		
+		//TUTORIALS
+		while($noTut == false && $courseTutInfoRow = $courseTutInfo->fetch_assoc())
+		{	
+			$conflict = false;
+			$dayString = str_replace("-","",$courseTutInfoRow["day"]);				
+			for($z = 0; $z < strlen($dayString); $z++)
+			{
+				$startTime = $courseTutInfoRow["start"];
+				$endTime = $courseTutInfoRow["end"];
+				$day = $dayString[$z];
+				$sql = "SELECT * FROM schedule WHERE day = '$day' AND 
+						((CAST(start as time) <= '$startTime' AND CAST(end as time) > '$startTime') or 
+						(CAST(start as time) < '$endTime' AND CAST(end as time) >= '$endTime'))";
+				$schedule = $conn->query($sql);	
+
+				if($schedule->num_rows > 0)
+				{
+					$conflict = true;
+					break;
+				}				
+			}
+			if($conflict == false)
+			{
+				$addTut = true;
+				break;
+			}
+		}		
+		
+		if($addTut == true )
+		{
+			//Seperate course day, into single days for easy schedule reading
+			$dayString = str_replace("-","",$courseTutInfoRow["day"]);				
+			for($y = 0; $y < strlen($dayString); $y++)
+			{
+				$dayChar = $dayString[$y];
+				$courseID = $courseTutInfoRow["id"];
+				$startTime = $courseTutInfoRow["start"];
+				$endTime = $courseTutInfoRow["end"];
+				$type = $courseTutInfoRow["courseType"];
+				$sql = "INSERT INTO schedule (studentID, day, courseName, type, start, end) VALUES ('$user', '$dayChar', '$courseID', '$type', '$startTime', '$endTime')";
+				$conn->query($sql);				
+			}			
+			echo " added <br>";
+		}	
+	
+		if($numOfCourse == 5)
+			break;
+		
+		skip:
+		
+	}
+						
+	header('Location: /cronograma/home.php');
       
 		
 
