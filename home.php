@@ -39,8 +39,8 @@
         height: auto;
         padding: 15px;
       }
-      .row.content {height:auto;}
-    }	
+   
+				
   </style>
 </head>
 <body>
@@ -116,7 +116,7 @@
       
 
 <div class="table-responsive">	
-	<table class="table">
+	<table class="table table-condensed table-hover">
     <thead>
       <tr>
 		<th><center>Time</center></th>
@@ -173,13 +173,16 @@
 		foreach($days as $day)
 		{	
 			$sql = "SELECT DISTINCT * FROM schedule join courseinfo on courseinfo.id = schedule.courseName and schedule.studentID = '$user' 
-					AND ((schedule.start > '$minute' and schedule.start <= '$end') or (schedule.start <= '$minute' AND schedule.end > '$minute')) AND schedule.day = '$day'";
+					AND ((schedule.start >= '$minute' and schedule.start < '$end') or (schedule.start <= '$minute' AND schedule.end > '$minute')) AND schedule.day = '$day'";
 			$schedule = $conn->query($sql);
 			if($schedule->num_rows > 0)
 			{
 				$scheduleRow = $schedule->fetch_assoc();
-				if($scheduleRow["start"] >= $minute && $scheduleRow["start"] <= $end)
-					echo "<td class = info><center>".$scheduleRow["code"]. " - ".$scheduleRow["courseType"]. "</center></td>";
+				if($scheduleRow["start"] >= $minute && $scheduleRow["start"] < $end)
+				{
+					$start = date( 'g:ia', strtotime($scheduleRow["start"])); 
+					echo "<td class=info><center>".$scheduleRow["code"]. " - ".$scheduleRow["courseType"]."<br>". date( 'H:i', strtotime($scheduleRow["start"])). "-". date( 'H:i', strtotime($scheduleRow["end"]))."</center></td>";
+				}
 				else
 					echo "<td class = info></td>";
 			}
