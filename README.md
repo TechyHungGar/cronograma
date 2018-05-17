@@ -2,6 +2,8 @@
 
 Source Code
 
-->PHP code to view a database of courses offered, and build a personalized schedule for a student. 
+->PHP
+
+->Webpage will build a personalized schedule for a student, based off of courses they completed and courses available to take. 
 
 ->Can make custom schedules with student defined conditions. 
